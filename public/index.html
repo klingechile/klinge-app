@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Klinge Ventas Admin</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="mark">K<span>◀</span></div>
+        <div>
+          <h1>KLINGE</h1>
+          <p>Ventas Admin</p>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="active" data-section="dashboard">📊 Dashboard</button>
+        <button data-section="sales">🧾 Ventas</button>
+        <button data-section="import">⬆️ Importar Shopify</button>
+        <button data-section="proofs">🏦 Comprobantes</button>
+        <button data-section="billing">🧾 Facturación</button>
+        <button data-section="sellers">👥 Vendedores</button>
+        <button data-section="reports">📈 Reportes</button>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">MVP Railway</p>
+          <h2 id="pageTitle">Panel de Ventas Klinge</h2>
+          <p id="pageSub">Control comercial de ventas, comprobantes, Shopify, vendedores y facturación.</p>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="clearDataBtn">Limpiar demo</button>
+          <button id="exportBtn">Exportar JSON</button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="section active">
+        <div class="kpis">
+          <article class="card kpi"><span>Ventas importadas</span><strong id="kpiOrders">0</strong><small>Órdenes únicas Shopify</small></article>
+          <article class="card kpi"><span>Monto vendido</span><strong id="kpiRevenue">$0</strong><small>Según total Shopify</small></article>
+          <article class="card kpi"><span>Comprobantes</span><strong id="kpiProofs">0</strong><small>Pagos manuales por revisar</small></article>
+          <article class="card kpi"><span>Facturación</span><strong id="kpiBilling">0</strong><small>Ventas listas para facturar</small></article>
+        </div>
+
+        <div class="grid two">
+          <article class="card">
+            <h3>Últimas ventas</h3>
+            <div class="tableWrap"><table><thead><tr><th>Orden</th><th>Cliente</th><th>Total</th><th>Pago</th><th>Despacho</th></tr></thead><tbody id="latestRows"></tbody></table></div>
+          </article>
+          <article class="card">
+            <h3>Prioridades operativas</h3>
+            <ul class="taskList" id="priorityList"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="sales" class="section">
+        <article class="card">
+          <div class="sectionHead">
+            <div><h3>Ventas realizadas</h3><p>Ventas importadas desde Shopify CSV. En esta versión MVP quedan guardadas en el navegador.</p></div>
+            <input id="salesSearch" class="search" placeholder="Buscar por orden, cliente, email o producto..." />
+          </div>
+          <div class="tableWrap"><table><thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Total</th><th>Pago</th><th>Despacho</th><th>Factura</th></tr></thead><tbody id="salesRows"></tbody></table></div>
+        </article>
+      </section>
+
+      <section id="import" class="section">
+        <div class="grid two">
+          <article class="card">
+            <h3>Importar ventas Shopify</h3>
+            <p>Sube el CSV exportado desde Shopify. El MVP agrupa líneas por orden, calcula KPIs y detecta estados de pago/despacho.</p>
+            <label class="dropzone" for="csvFile">
+              <strong>Seleccionar CSV</strong>
+              <span>orders_export.csv</span>
+              <input id="csvFile" type="file" accept=".csv,text/csv" />
+            </label>
+            <div class="actions"><button id="loadSampleBtn" class="secondary">Cargar ejemplo demo</button></div>
+          </article>
+          <article class="card">
+            <h3>Resumen importación</h3>
+            <div class="summary" id="importSummary">
+              <p>Sin archivo cargado.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="proofs" class="section">
+        <article class="card">
+          <h3>Comprobantes por aprobar</h3>
+          <p>El MVP detecta pagos tipo transferencia/bank deposit como comprobantes pendientes.</p>
+          <div class="tableWrap"><table><thead><tr><th>Orden</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Estado</th><th>Acción</th></tr></thead><tbody id="proofRows"></tbody></table></div>
+        </article>
+      </section>
+
+      <section id="billing" class="section">
+        <article class="card">
+          <h3>Facturación</h3>
+          <p>Ventas pagadas que requieren emisión o validación de DTE. Se mantiene la línea para conexión con Lioren.</p>
+          <div class="tableWrap"><table><thead><tr><th>Orden</th><th>Cliente</th><th>Total</th><th>Pago</th><th>Estado DTE</th><th>Acción</th></tr></thead><tbody id="billingRows"></tbody></table></div>
+        </article>
+      </section>
+
+      <section id="sellers" class="section">
+        <div class="grid two">
+          <article class="card">
+            <h3>Vendedores</h3>
+            <p>Asignación comercial inicial para asesoría, seguimiento y cierre.</p>
+            <div class="sellerGrid" id="sellerCards"></div>
+          </article>
+          <article class="card">
+            <h3>Próximas mejoras</h3>
+            <ul class="taskList">
+              <li>Asignar vendedor por venta.</li>
+              <li>Registrar seguimiento y próxima acción.</li>
+              <li>Medir ventas por vendedor.</li>
+              <li>Conectar comprobantes y facturación.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="reports" class="section">
+        <div class="grid three">
+          <article class="card"><h3>Por método de pago</h3><div id="paymentReport"></div></article>
+          <article class="card"><h3>Por estado despacho</h3><div id="fulfillmentReport"></div></article>
+          <article class="card"><h3>Productos más vendidos</h3><div id="productReport"></div></article>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
