@@ -35,5 +35,10 @@ source = source.replace(
   '  if (url.pathname === "/api/shopify/sync-orders" && req.method === "POST") {\n    sendJson(res, 200, await syncShopifyOrders());\n    return;\n  }\n\n  const proofMatch = url.pathname.match(/^\\/api\\/payment-proofs\\/(.+)\\/approve$/);'
 );
 
+source = source.replace(
+  '    if (url.pathname === "/" || url.pathname === "/index.html") {',
+  '    if (url.pathname === "/legacy" || url.pathname === "/legacy.html") {\n      serveFile(res, path.join(__dirname, "index.html"), "text/html; charset=utf-8");\n      return;\n    }\n\n    if (url.pathname === "/" || url.pathname === "/index.html") {'
+);
+
 fs.writeFileSync(runtimePath, source);
 await import(runtimePath.href);
