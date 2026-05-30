@@ -3,7 +3,7 @@ const sampleCsv = `Name,Email,Financial Status,Paid at,Fulfillment Status,Fulfil
 #1002,cliente2@mail.com,paid,2026-05-29 12:20:00,unfulfilled,,CLP,139990,5000,0,144990,0,2026-05-29 12:10:00,1,Panel LED 60x120,139990,LED-60120,Cliente Dos,La Florida,Región Metropolitana,+56922222222,Cliente Dos,La Florida,Región Metropolitana,+56922222222,,Bank Deposit,TR-002,0,1002,,Low,web
 #1003,cliente3@mail.com,voided,,unfulfilled,,CLP,72540,0,0,72540,0,2026-05-28 09:00:00,1,Pantalla LED 50x70,72540,LED-5070,Cliente Tres,Ñuñoa,Región Metropolitana,+56933333333,Cliente Tres,Ñuñoa,Región Metropolitana,+56933333333,,Fintoc,FT-003,0,1003,,Low,web`;
 
-let state = { sales: [], supabaseConfigured: false };
+let state = { sales: [], databaseConfigured: false };
 
 const sections = {
   dashboard: ["Panel de Ventas Klinge", "Control comercial de ventas, comprobantes, Shopify, vendedores y facturación."],
@@ -54,9 +54,9 @@ async function api(path, options = {}) {
 async function loadStatus() {
   try {
     const status = await api("/api/status");
-    state.supabaseConfigured = Boolean(status.supabaseConfigured);
+    state.databaseConfigured = Boolean(status.databaseConfigured);
   } catch {
-    state.supabaseConfigured = false;
+    state.databaseConfigured = false;
   }
 }
 
@@ -66,7 +66,7 @@ async function loadSales() {
     state.sales = data.sales || [];
   } catch (error) {
     state.sales = [];
-    renderError(`No se pudieron cargar ventas desde Supabase: ${error.message}`);
+    renderError(`No se pudieron cargar ventas desde Railway PostgreSQL: ${error.message}`);
   }
 }
 
@@ -173,8 +173,8 @@ function isManualPayment(sale) {
   return method.includes("bank") || method.includes("deposit") || method.includes("transfer") || method.includes("transferencia");
 }
 
-async function importSalesToSupabase(newSales) {
-  setBusy("Importando ventas en Supabase...");
+async function importSalesToDatabase(newSales) {
+  setBusy("Importando ventas en Railway PostgreSQL...");
   const result = await api("/api/shopify/import-csv", {
     method: "POST",
     body: JSON.stringify({ sales: newSales })
@@ -241,7 +241,7 @@ function renderDashboard() {
   `).join("") || `<tr><td colspan="5" class="empty">Importa ventas Shopify para iniciar.</td></tr>`;
 
   const tasks = [];
-  if (!state.supabaseConfigured) tasks.push("Configurar SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Railway.");
+  if (!state.databaseConfigured) tasks.push("Configurar DATABASE_URL en Railway y asociar el servicio PostgreSQL a la app.");
   if (proofs.length) tasks.push(`${proofs.length} comprobante(s) por aprobar.`);
   if (billing.length) tasks.push(`${billing.length} venta(s) lista(s) para facturación.`);
   const pendingDispatch = sales.filter(s => s.financialStatus === "paid" && s.fulfillmentStatus !== "fulfilled").length;
@@ -326,7 +326,7 @@ function renderImportSummary(result, sales) {
     ["Pagadas", paid],
     ["Anuladas", voided],
     ["Monto no anulado", money(revenue)],
-    ["Persistencia", "Supabase"]
+    ["Persistencia", "Railway PostgreSQL"]
   ].map(([k, v]) => `<div class="summaryItem"><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join("");
 }
 
@@ -334,7 +334,7 @@ async function handleCsvText(text) {
   try {
     const rows = parseCsv(text);
     const sales = normalizeOrders(rows);
-    const result = await importSalesToSupabase(sales);
+    const result = await importSalesToDatabase(sales);
     renderImportSummary(result, sales);
     renderAll();
   } catch (error) {
@@ -348,7 +348,7 @@ async function handleCsvFile(file) {
 
 async function refresh() {
   await loadStatus();
-  if (state.supabaseConfigured) await loadSales();
+  if (state.databaseConfigured) await loadSales();
   renderAll();
 }
 
@@ -375,7 +375,7 @@ function setupEvents() {
 
   $("clearDataBtn").addEventListener("click", async () => {
     await refresh();
-    $("importSummary").innerHTML = "<p>Datos recargados desde Supabase. La eliminación masiva se hará en una acción segura futura.</p>";
+    $("importSummary").innerHTML = "<p>Datos recargados desde Railway PostgreSQL. La eliminación masiva se hará en una acción segura futura.</p>";
   });
 
   $("exportBtn").addEventListener("click", () => {
