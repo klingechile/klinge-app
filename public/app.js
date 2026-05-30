@@ -1,11 +1,9 @@
-const STORAGE_KEY = "klinge_sales_admin_mvp";
-
 const sampleCsv = `Name,Email,Financial Status,Paid at,Fulfillment Status,Fulfilled at,Currency,Subtotal,Shipping,Taxes,Total,Discount Amount,Created at,Lineitem quantity,Lineitem name,Lineitem price,Lineitem sku,Billing Name,Billing City,Billing Province Name,Billing Phone,Shipping Name,Shipping City,Shipping Province Name,Shipping Phone,Notes,Payment Method,Payment Reference,Refunded Amount,Id,Tags,Risk Level,Source
 #1001,cliente1@mail.com,paid,2026-05-29 10:15:00,fulfilled,2026-05-30 11:00:00,CLP,96990,0,0,96990,0,2026-05-29 10:10:00,1,Panel LED 60x90,96990,LED-6090,Cliente Uno,Santiago,Región Metropolitana,+56911111111,Cliente Uno,Santiago,Región Metropolitana,+56911111111,,Mercado Pago,MP-001,0,1001,,Low,web
 #1002,cliente2@mail.com,paid,2026-05-29 12:20:00,unfulfilled,,CLP,139990,5000,0,144990,0,2026-05-29 12:10:00,1,Panel LED 60x120,139990,LED-60120,Cliente Dos,La Florida,Región Metropolitana,+56922222222,Cliente Dos,La Florida,Región Metropolitana,+56922222222,,Bank Deposit,TR-002,0,1002,,Low,web
 #1003,cliente3@mail.com,voided,,unfulfilled,,CLP,72540,0,0,72540,0,2026-05-28 09:00:00,1,Pantalla LED 50x70,72540,LED-5070,Cliente Tres,Ñuñoa,Región Metropolitana,+56933333333,Cliente Tres,Ñuñoa,Región Metropolitana,+56933333333,,Fintoc,FT-003,0,1003,,Low,web`;
 
-let state = loadState();
+let state = { sales: [], supabaseConfigured: false };
 
 const sections = {
   dashboard: ["Panel de Ventas Klinge", "Control comercial de ventas, comprobantes, Shopify, vendedores y facturación."],
@@ -28,13 +26,53 @@ function esc(value) {
     .replaceAll("'", "&#039;");
 }
 
-function loadState() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { sales: [], proofStatus: {} }; }
-  catch { return { sales: [], proofStatus: {} }; }
+function setBusy(message = "Cargando...") {
+  const summary = $("importSummary");
+  if (summary) summary.innerHTML = `<p>${esc(message)}</p>`;
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+
+  if (!response.ok) {
+    throw new Error(data?.error || `Error HTTP ${response.status}`);
+  }
+
+  return data;
+}
+
+async function loadStatus() {
+  try {
+    const status = await api("/api/status");
+    state.supabaseConfigured = Boolean(status.supabaseConfigured);
+  } catch {
+    state.supabaseConfigured = false;
+  }
+}
+
+async function loadSales() {
+  try {
+    const data = await api("/api/sales");
+    state.sales = data.sales || [];
+  } catch (error) {
+    state.sales = [];
+    renderError(`No se pudieron cargar ventas desde Supabase: ${error.message}`);
+  }
+}
+
+function renderError(message) {
+  const summary = $("importSummary");
+  if (summary) summary.innerHTML = `<p class="empty">${esc(message)}</p>`;
 }
 
 function parseCsv(text) {
@@ -47,11 +85,7 @@ function parseCsv(text) {
     const char = text[i];
     const next = text[i + 1];
 
-    if (char === '"' && quote && next === '"') {
-      cell += '"';
-      i++;
-      continue;
-    }
+    if (char === '"' && quote && next === '"') { cell += '"'; i++; continue; }
     if (char === '"') { quote = !quote; continue; }
     if (char === "," && !quote) { row.push(cell); cell = ""; continue; }
     if ((char === "\n" || char === "\r") && !quote) {
@@ -88,8 +122,8 @@ function normalizeOrders(rows) {
 
     if (!map.has(orderId)) {
       map.set(orderId, {
-        id: orderId,
-        name: row.Name || orderId,
+        id: String(orderId),
+        name: row.Name || String(orderId),
         email: row.Email || "",
         customer: row["Billing Name"] || row["Shipping Name"] || row.Email || "Cliente sin nombre",
         phone: row["Billing Phone"] || row["Shipping Phone"] || "",
@@ -139,24 +173,14 @@ function isManualPayment(sale) {
   return method.includes("bank") || method.includes("deposit") || method.includes("transfer") || method.includes("transferencia");
 }
 
-function importSales(newSales) {
-  const existing = new Map(state.sales.map(s => [s.id, s]));
-  let added = 0;
-  let updated = 0;
-
-  for (const sale of newSales) {
-    if (existing.has(sale.id)) {
-      existing.set(sale.id, { ...existing.get(sale.id), ...sale });
-      updated++;
-    } else {
-      existing.set(sale.id, sale);
-      added++;
-    }
-  }
-
-  state.sales = [...existing.values()].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  saveState();
-  return { added, updated, total: state.sales.length };
+async function importSalesToSupabase(newSales) {
+  setBusy("Importando ventas en Supabase...");
+  const result = await api("/api/shopify/import-csv", {
+    method: "POST",
+    body: JSON.stringify({ sales: newSales })
+  });
+  state.sales = result.sales || [];
+  return result;
 }
 
 function badge(text, type = "blue") {
@@ -184,6 +208,14 @@ function invoiceBadge(status) {
   return badge(status || "No lista", "blue");
 }
 
+function proofBadge(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "aprobado") return badge("Aprobado", "green");
+  if (s === "rechazado") return badge("Rechazado", "red");
+  if (s === "no requerido") return badge("No requerido", "blue");
+  return badge("Pendiente", "yellow");
+}
+
 function renderAll() {
   renderDashboard();
   renderSales();
@@ -196,7 +228,7 @@ function renderAll() {
 function renderDashboard() {
   const sales = state.sales;
   const revenue = sales.filter(s => s.financialStatus !== "voided").reduce((sum, s) => sum + Number(s.total || 0), 0);
-  const proofs = sales.filter(s => isManualPayment(s) && (state.proofStatus[s.id] || "pendiente") !== "aprobado");
+  const proofs = sales.filter(s => isManualPayment(s) && s.paymentProofStatus !== "aprobado");
   const billing = sales.filter(s => s.financialStatus === "paid" && s.invoiceStatus !== "facturada");
 
   $("kpiOrders").textContent = sales.length;
@@ -209,6 +241,7 @@ function renderDashboard() {
   `).join("") || `<tr><td colspan="5" class="empty">Importa ventas Shopify para iniciar.</td></tr>`;
 
   const tasks = [];
+  if (!state.supabaseConfigured) tasks.push("Configurar SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Railway.");
   if (proofs.length) tasks.push(`${proofs.length} comprobante(s) por aprobar.`);
   if (billing.length) tasks.push(`${billing.length} venta(s) lista(s) para facturación.`);
   const pendingDispatch = sales.filter(s => s.financialStatus === "paid" && s.fulfillmentStatus !== "fulfilled").length;
@@ -238,14 +271,13 @@ function renderSales() {
 
 function renderProofs() {
   const rows = state.sales.filter(isManualPayment);
-  $("proofRows").innerHTML = rows.map(s => {
-    const status = state.proofStatus[s.id] || "pendiente";
-    return `<tr>
+  $("proofRows").innerHTML = rows.map(s => `
+    <tr>
       <td>${esc(s.name)}</td><td>${esc(s.customer)}</td><td>${money(s.total)}</td><td>${esc(s.paymentMethod)}</td>
-      <td>${badge(status, status === "aprobado" ? "green" : "yellow")}</td>
+      <td>${proofBadge(s.paymentProofStatus)}</td>
       <td><button class="miniBtn" data-approve-proof="${esc(s.id)}">Aprobar</button></td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="6" class="empty">No hay pagos manuales detectados.</td></tr>`;
+    </tr>
+  `).join("") || `<tr><td colspan="6" class="empty">No hay pagos manuales detectados.</td></tr>`;
 }
 
 function renderBilling() {
@@ -293,16 +325,30 @@ function renderImportSummary(result, sales) {
     ["Actualizadas", result.updated],
     ["Pagadas", paid],
     ["Anuladas", voided],
-    ["Monto no anulado", money(revenue)]
+    ["Monto no anulado", money(revenue)],
+    ["Persistencia", "Supabase"]
   ].map(([k, v]) => `<div class="summaryItem"><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join("");
 }
 
+async function handleCsvText(text) {
+  try {
+    const rows = parseCsv(text);
+    const sales = normalizeOrders(rows);
+    const result = await importSalesToSupabase(sales);
+    renderImportSummary(result, sales);
+    renderAll();
+  } catch (error) {
+    renderError(error.message);
+  }
+}
+
 async function handleCsvFile(file) {
-  const text = await file.text();
-  const rows = parseCsv(text);
-  const sales = normalizeOrders(rows);
-  const result = importSales(sales);
-  renderImportSummary(result, sales);
+  await handleCsvText(await file.text());
+}
+
+async function refresh() {
+  await loadStatus();
+  if (state.supabaseConfigured) await loadSales();
   renderAll();
 }
 
@@ -324,20 +370,12 @@ function setupEvents() {
     if (file) handleCsvFile(file);
   });
 
-  $("loadSampleBtn").addEventListener("click", () => {
-    const sales = normalizeOrders(parseCsv(sampleCsv));
-    const result = importSales(sales);
-    renderImportSummary(result, sales);
-    renderAll();
-  });
-
+  $("loadSampleBtn").addEventListener("click", () => handleCsvText(sampleCsv));
   $("salesSearch").addEventListener("input", renderSales);
 
-  $("clearDataBtn").addEventListener("click", () => {
-    state = { sales: [], proofStatus: {} };
-    saveState();
-    renderAll();
-    $("importSummary").innerHTML = "<p>Datos demo eliminados.</p>";
+  $("clearDataBtn").addEventListener("click", async () => {
+    await refresh();
+    $("importSummary").innerHTML = "<p>Datos recargados desde Supabase. La eliminación masiva se hará en una acción segura futura.</p>";
   });
 
   $("exportBtn").addEventListener("click", () => {
@@ -350,23 +388,27 @@ function setupEvents() {
     URL.revokeObjectURL(url);
   });
 
-  document.addEventListener("click", event => {
+  document.addEventListener("click", async event => {
     const proofId = event.target.dataset?.approveProof;
     const invoiceId = event.target.dataset?.invoice;
 
-    if (proofId) {
-      state.proofStatus[proofId] = "aprobado";
-      saveState();
-      renderAll();
-    }
+    try {
+      if (proofId) {
+        const result = await api(`/api/payment-proofs/${encodeURIComponent(proofId)}/approve`, { method: "PATCH" });
+        state.sales = result.sales || state.sales;
+        renderAll();
+      }
 
-    if (invoiceId) {
-      state.sales = state.sales.map(s => s.id === invoiceId ? { ...s, invoiceStatus: "facturada" } : s);
-      saveState();
-      renderAll();
+      if (invoiceId) {
+        const result = await api(`/api/invoices/${encodeURIComponent(invoiceId)}/mark-issued`, { method: "PATCH" });
+        state.sales = result.sales || state.sales;
+        renderAll();
+      }
+    } catch (error) {
+      renderError(error.message);
     }
   });
 }
 
 setupEvents();
-renderAll();
+refresh();
