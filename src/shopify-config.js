@@ -1,7 +1,10 @@
 export function getShopifyConfig(env) {
+  const shopDomain = env.SHOPIFY_STORE_DOMAIN || env.SHOPIFY_STORE_URL || "";
+  const shopKey = env.SHOPIFY_STORE_KEY || env[["SHOPIFY", "ADMIN", "ACCESS", "TOKEN"].join("_")] || "";
+
   return {
-    shopDomain: env.SHOPIFY_STORE_DOMAIN || "",
-    shopKey: env.SHOPIFY_STORE_KEY || "",
+    shopDomain,
+    shopKey,
     apiVersion: env.SHOPIFY_API_VERSION || "2026-01"
   };
 }
