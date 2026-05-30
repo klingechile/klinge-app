@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Klinge Ventas Admin MVP for Railway deployment",
   "scripts": {
-    "start": "node server.js",
+    "start": "node patch-server.js",
     "check": "node --check server.js"
   },
   "dependencies": {
