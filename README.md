@@ -1,4 +1,4 @@
-# Klinge Ventas Admin — Railway + Supabase MVP
+# Klinge Ventas Admin — Railway PostgreSQL MVP
 
 Panel interno para gestionar ventas Shopify, comprobantes por aprobar, facturación y apoyo comercial a vendedores.
 
@@ -10,18 +10,19 @@ Panel interno para gestionar ventas Shopify, comprobantes por aprobar, facturaci
 - Frontend estático servido desde `/public`.
 - Importación CSV Shopify desde navegador.
 - Consolidación de órdenes por ID/Name.
-- Persistencia en Supabase usando backend Node.
+- Persistencia directa en Railway PostgreSQL usando `DATABASE_URL`.
+- Creación automática del esquema al iniciar el servidor.
 - KPIs básicos de ventas, comprobantes y facturación.
 - Aprobación de comprobantes.
 - Marcado simple de facturación.
 
 ## Seguridad
 
-- El navegador no recibe `SUPABASE_SERVICE_ROLE_KEY`.
+- El navegador no recibe credenciales de base de datos.
 - El frontend llama a `/api/*`.
-- El backend usa `SUPABASE_SERVICE_ROLE_KEY` solo desde Railway.
-- Las tablas quedan con RLS habilitado.
-- No se crean policies públicas en el MVP.
+- El backend usa `DATABASE_URL` solo desde Railway.
+- Usar `DATABASE_URL` para la app productiva.
+- No usar `DATABASE_PUBLIC_URL` dentro de la app productiva salvo para pruebas externas puntuales.
 
 ## Fuera del MVP
 
@@ -33,15 +34,16 @@ Panel interno para gestionar ventas Shopify, comprobantes por aprobar, facturaci
 
 ## Variables Railway
 
-Configurar en Railway:
+Railway entrega estas variables al agregar PostgreSQL al proyecto. Para la app solo necesitas que el servicio tenga acceso a:
 
 ```env
 NODE_ENV=production
 ADMIN_USER=admin
 ADMIN_PASSWORD=usar_una_clave_segura
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=usar_service_role_key
+DATABASE_URL=postgresql://...
 ```
+
+Variables como `PGHOST`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` y `PGPORT` son útiles para conexión manual, pero el backend usa `DATABASE_URL`.
 
 Opcional para fases posteriores:
 
@@ -51,22 +53,16 @@ LUMI_ADMIN_KEY=usar_solo_si_se_agrega_proxy_backend
 ALLOWED_ORIGIN=https://app.klinge.cl
 ```
 
-## Supabase
+## Base de datos
 
-Aplicar la migración:
-
-```txt
-supabase/migrations/20260530_create_sales_admin_tables.sql
-```
-
-Tablas creadas:
+El servidor crea automáticamente estas tablas si no existen:
 
 - `sales`
 - `sale_items`
 - `payment_proofs`
 - `invoices`
 
-Todas quedan con RLS habilitado. El acceso operativo lo realiza el backend con service role desde Railway.
+También crea índices mínimos para búsqueda por orden, estados, facturación y fecha Shopify.
 
 ## Ejecutar local
 
@@ -75,6 +71,14 @@ npm install
 npm run check
 npm start
 ```
+
+Para probar local contra Railway PostgreSQL puedes usar `DATABASE_PUBLIC_URL` temporalmente en tu terminal local:
+
+```bash
+DATABASE_URL="pegar_database_public_url_solo_local" npm start
+```
+
+En Railway productivo usa `DATABASE_URL`, no `DATABASE_PUBLIC_URL`.
 
 Abrir:
 
@@ -86,16 +90,17 @@ En local no se exige Basic Auth. En Railway, con `NODE_ENV=production`, sí se e
 
 ## Railway
 
-1. Crear cuenta/proyecto en Railway.
-2. New Project → Deploy from GitHub repo.
-3. Elegir `klingechile/klinge-app`.
+1. Crear proyecto en Railway.
+2. Agregar servicio PostgreSQL.
+3. Conectar el repo `klingechile/klinge-app`.
 4. Seleccionar rama `feature/klinge-sales-admin-railway-mvp` para validar MVP.
-5. Agregar variables de entorno.
-6. Deploy.
-7. Validar `/health`.
-8. Abrir dominio generado por Railway.
-9. Importar CSV Shopify desde el panel.
-10. Validar datos persistidos en Supabase.
+5. Confirmar que la app tenga `DATABASE_URL` disponible.
+6. Agregar `NODE_ENV`, `ADMIN_USER` y `ADMIN_PASSWORD`.
+7. Deploy.
+8. Validar `/health`.
+9. Abrir dominio generado por Railway.
+10. Importar CSV Shopify desde el panel.
+11. Validar datos persistidos en Railway PostgreSQL.
 
 ## Endpoints MVP
 
@@ -112,6 +117,6 @@ PATCH /api/invoices/:externalOrderId/mark-issued
 - Conectar Shopify Admin API.
 - Agregar vendedores reales.
 - Agregar asignación de vendedor por venta.
-- Agregar carga real de comprobantes a Supabase Storage.
+- Agregar carga real de comprobantes.
 - Conectar facturación Lioren.
 - Agregar roles y auditoría.
