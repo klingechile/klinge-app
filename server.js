@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { checkDatabase } from "./src/db/pool.js";
 import { handleDataRoute } from "./src/http/data-routes.js";
 import { handleProxyRoute } from "./src/http/proxy-routes.js";
+import { handleAdminRoute } from "./src/http/admin-routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,6 +85,11 @@ const server = http.createServer(async (req, res) => {
     if (!isAuthorized(req)) {
       unauthorized(res);
       return;
+    }
+
+    if (url.pathname.startsWith("/api/admin/")) {
+      const handled = await handleAdminRoute(req, res, url);
+      if (handled !== false) return;
     }
 
     if (url.pathname.startsWith("/api/data/")) {
