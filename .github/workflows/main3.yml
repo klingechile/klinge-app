@@ -1,0 +1,83 @@
+name: Migrate Supabase to Railway DB
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Escribe MIGRATE para migrar Supabase a Railway PostgreSQL"
+        required: true
+
+jobs:
+  migrate-db:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'MIGRATE' }}
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Validate secrets
+        env:
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_DATABASE_URL" ]; then
+            echo "Missing SUPABASE_DATABASE_URL"
+            exit 1
+          fi
+
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            echo "Missing RAILWAY_DATABASE_URL"
+            exit 1
+          fi
+
+      - name: Backup Supabase
+        env:
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          pg_dump "$SUPABASE_DATABASE_URL" \
+            --schema=public \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file=supabase.dump
+
+      - name: Clean Railway PostgreSQL
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          psql "$RAILWAY_DATABASE_URL" <<'SQL'
+          drop schema if exists public cascade;
+          create schema public;
+          grant all on schema public to public;
+          SQL
+
+      - name: Restore into Railway PostgreSQL
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          pg_restore \
+            --dbname="$RAILWAY_DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            supabase.dump
+
+      - name: Validate counts
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          psql "$RAILWAY_DATABASE_URL" <<'SQL'
+          select table_name
+          from information_schema.tables
+          where table_schema = 'public'
+          order by table_name;
+
+          select count(*) as ventas from ventas;
+          select count(*) as clientes from clientes;
+          select count(*) as user_pins from user_pins;
+          select count(*) as vendedores from vendedores;
+          SQL
