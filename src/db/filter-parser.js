@@ -17,15 +17,26 @@ export function parseFilters(searchParams, startIndex = 1) {
   let index = startIndex;
 
   for (const [key, rawValue] of searchParams.entries()) {
-    if (["order", "limit", "offset"].includes(key)) continue;
+    if (["order", "limit", "offset", "select"].includes(key)) continue;
     if (!rawValue || !rawValue.includes(".")) continue;
 
     const [operator, ...rest] = rawValue.split(".");
     const value = rest.join(".");
+    const column = safeIdentifier(key);
+
+    if (operator === "in") {
+      const normalized = value.replace(/^\(/, "").replace(/\)$/, "");
+      const list = normalized.split(",").map((item) => item.trim()).filter(Boolean);
+      clauses.push(`${column} = any($${index})`);
+      values.push(list);
+      index += 1;
+      continue;
+    }
+
     const sqlOperator = OPERATORS[operator];
     if (!sqlOperator) continue;
 
-    clauses.push(`${safeIdentifier(key)} ${sqlOperator} $${index}`);
+    clauses.push(`${column} ${sqlOperator} $${index}`);
     values.push(value);
     index += 1;
   }
