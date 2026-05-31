@@ -28,6 +28,12 @@ export const ALLOWED_TABLES = new Set([
   "ventas_dte_log"
 ]);
 
+export const PRIMARY_KEYS = {
+  app_config: "key",
+  user_pins: "user_id",
+  user_permissions: "user_id"
+};
+
 export const DEFAULT_ORDER = {
   user_pins: "updated_at",
   user_permissions: "updated_at",
@@ -57,6 +63,10 @@ export const DEFAULT_ORDER = {
   crm_message_queue: "created_at",
   ventas_dte_log: "created_at"
 };
+
+export function getPrimaryKey(table) {
+  return PRIMARY_KEYS[table] || "id";
+}
 
 export function assertAllowedTable(table) {
   if (!ALLOWED_TABLES.has(table)) {
