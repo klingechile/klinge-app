@@ -64,10 +64,10 @@
       <section id="sales" class="section">
         <article class="card">
           <div class="sectionHead">
-            <div><h3>Ventas realizadas</h3><p>Ventas importadas desde Shopify CSV. En esta versión MVP quedan guardadas en el navegador.</p></div>
-            <input id="salesSearch" class="search" placeholder="Buscar por orden, cliente, email o producto..." />
+            <div><h3>Ventas realizadas</h3><p>Ventas importadas desde Shopify CSV. Se consolidan por orden y se mantienen en el navegador para validar el flujo legacy.</p></div>
+            <input id="salesSearch" class="search" placeholder="Buscar por orden, cliente, RUT, email, teléfono, ciudad, SKU o producto..." />
           </div>
-          <div class="tableWrap"><table><thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Total</th><th>Pago</th><th>Despacho</th><th>Factura</th></tr></thead><tbody id="salesRows"></tbody></table></div>
+          <div class="tableWrap"><table><thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Contacto</th><th>Producto</th><th>Ciudad</th><th>Total / Método</th><th>Pago</th><th>Despacho / DTE</th></tr></thead><tbody id="salesRows"></tbody></table></div>
         </article>
       </section>
 
@@ -75,13 +75,18 @@
         <div class="grid two">
           <article class="card">
             <h3>Importar ventas Shopify</h3>
-            <p>Sube el CSV exportado desde Shopify. El MVP agrupa líneas por orden, calcula KPIs y detecta estados de pago/despacho.</p>
+            <p>Sube el CSV exportado desde Shopify. El sistema agrupa líneas por orden, conserva productos/SKU, contacto, dirección, pago, despacho, descuentos y datos para facturación.</p>
             <label class="dropzone" for="csvFile">
               <strong>Seleccionar CSV</strong>
               <span>orders_export.csv</span>
               <input id="csvFile" type="file" accept=".csv,text/csv" />
             </label>
             <div class="actions"><button id="loadSampleBtn" class="secondary">Cargar ejemplo demo</button></div>
+            <ul class="helpList">
+              <li>Compatible con export de órdenes Shopify: Name, Id, Email, Total, Payment Method y Lineitem name.</li>
+              <li>Si el pedido trae varias líneas de producto, se consolida en una sola venta.</li>
+              <li>Detecta RUT desde notas cuando venga como “Rut: 78.222.515-4”.</li>
+            </ul>
           </article>
           <article class="card">
             <h3>Resumen importación</h3>
