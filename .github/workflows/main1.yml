@@ -1,0 +1,113 @@
+name: Clean public and migrate DB
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Rama a limpiar/migrar"
+        required: true
+        default: "feature/html-railway-postgres-action"
+      confirm:
+        description: "Escribe MIGRATE para limpiar public y migrar BD"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  clean-and-migrate:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'MIGRATE' }}
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove public HTML/assets
+        run: |
+          rm -rf public
+          mkdir -p public
+          echo "Public cleaned for Railway/PostgreSQL migration." > public/.gitkeep
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public
+
+          if git diff --cached --quiet; then
+            echo "No public changes"
+          else
+            git commit -m "chore: clean public folder"
+            git push origin HEAD:${{ github.event.inputs.target_branch }}
+          fi
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Validate secrets
+        env:
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_DATABASE_URL" ]; then
+            echo "Missing SUPABASE_DATABASE_URL"
+            exit 1
+          fi
+
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            echo "Missing RAILWAY_DATABASE_URL"
+            exit 1
+          fi
+
+      - name: Backup Supabase
+        env:
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          pg_dump "$SUPABASE_DATABASE_URL" \
+            --schema=public \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file=supabase.dump
+
+      - name: Clean Railway PostgreSQL
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          psql "$RAILWAY_DATABASE_URL" <<'SQL'
+          drop schema if exists public cascade;
+          create schema public;
+          grant all on schema public to public;
+          SQL
+
+      - name: Restore into Railway PostgreSQL
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          pg_restore \
+            --dbname="$RAILWAY_DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            supabase.dump
+
+      - name: Validate counts
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          psql "$RAILWAY_DATABASE_URL" <<'SQL'
+          select table_name
+          from information_schema.tables
+          where table_schema = 'public'
+          order by table_name;
+
+          select count(*) as ventas from ventas;
+          select count(*) as clientes from clientes;
+          select count(*) as user_pins from user_pins;
+          select count(*) as vendedores from vendedores;
+          SQL
