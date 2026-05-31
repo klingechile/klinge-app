@@ -24,7 +24,7 @@ function setSecurityHeaders(res) {
 
 function unauthorized(res) {
   res.writeHead(401, {
-    "WWW-Authenticate": 'Basic realm="Klinge Ventas Admin"',
+    "WWW-Authenticate": 'Basic realm="Klinge Admin"',
     "Content-Type": "text/plain; charset=utf-8"
   });
   res.end("Unauthorized");
@@ -64,7 +64,7 @@ const server = http.createServer((req, res) => {
 
     if (req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ status: "ok", service: "klinge-sales-admin" }));
+      res.end(JSON.stringify({ status: "ok", service: "klinge-app" }));
       return;
     }
 
@@ -80,6 +80,11 @@ const server = http.createServer((req, res) => {
     }
 
     if (req.url === "/" || req.url === "/index.html") {
+      serveFile(res, path.join(__dirname, "index.html"), "text/html; charset=utf-8");
+      return;
+    }
+
+    if (req.url === "/mvp" || req.url === "/mvp.html") {
       serveFile(res, path.join(__dirname, "public", "index.html"), "text/html; charset=utf-8");
       return;
     }
@@ -104,5 +109,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Klinge Ventas Admin running on port ${PORT}`);
+  console.log(`Klinge App running on port ${PORT}`);
 });
