@@ -67,6 +67,21 @@ async function sbBatch(t,rows){
 
 html = html.slice(0, start) + replacement + html.slice(dbIndex);
 
+// Proxy DTE generation through Railway backend.
+html = html.replaceAll("https://generar-dte-production.up.railway.app/api/facturas", "/api/dte/facturas");
+
+// Proxy Lumi message sends through Railway backend and remove browser-exposed admin header.
+html = html.replaceAll("https://lumi-klinge-bot-production.up.railway.app/admin/mensaje", "/api/lumi/message");
+html = html.replaceAll("lumiUrl+'/admin/mensaje'", "'/api/lumi/message'");
+html = html.replace(/,?\s*'x-admin-key'\s*:\s*'klinge_admin_2024'/g, "");
+html = html.replace(/,?\s*'x-admin-key'\s*:\s*\(typeof ADMIN_KEY!==\'undefined\'\?ADMIN_KEY:\'klinge_admin_2024\'\)/g, "");
+
+// Route Anthropic calls through backend. Backend uses ANTHROPIC_API_KEY, not browser-stored keys.
+html = html.replaceAll("https://api.anthropic.com/v1/messages", "/api/ai/messages");
+html = html.replace(/\s*'x-api-key'\s*:\s*key,?\n/g, "");
+html = html.replace(/\s*'anthropic-dangerous-direct-browser-access'\s*:\s*'true',?\n/g, "");
+html = html.replace(/var key=getAntKey\(\);\n\s*if\(!key\) throw new Error\('Sin API key configurada'\);/g, "");
+
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, html);
 
