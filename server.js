@@ -6,13 +6,14 @@ import { checkDatabase } from "./src/db/pool.js";
 import { handleDataRoute } from "./src/http/data-routes.js";
 import { handleProxyRoute } from "./src/http/proxy-routes.js";
 import { handleAdminRoute } from "./src/http/admin-routes.js";
+import { handleRestCompatRoute } from "./src/http/rest-compat-routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_USER = process.env.ADMIN_USER || "admin";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+const ADMIN_USER = process.env.ADMIN_USER;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 function setSecurityHeaders(res) {
@@ -36,6 +37,7 @@ function unauthorized(res) {
 
 function isAuthorized(req) {
   if (NODE_ENV !== "production") return true;
+  if (!ADMIN_USER || !ADMIN_PASSWORD) return false;
 
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Basic ")) return false;
@@ -89,6 +91,11 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname.startsWith("/api/admin/")) {
       const handled = await handleAdminRoute(req, res, url);
+      if (handled !== false) return;
+    }
+
+    if (url.pathname.startsWith("/rest/v1/")) {
+      const handled = await handleRestCompatRoute(req, res, url);
       if (handled !== false) return;
     }
 
