@@ -57,6 +57,27 @@ export async function updateRow(table, id, payload) {
   return result.rows;
 }
 
+export async function updateMany(table, searchParams, payload) {
+  assertAllowedTable(table);
+  safeIdentifier(table);
+
+  const columns = Object.keys(payload || {}).map(safeIdentifier);
+  if (!columns.length) return [];
+
+  const values = columns.map((column) => payload[column]);
+  const assignments = columns.map((column, index) => `${column} = $${index + 1}`).join(", ");
+  const { clauses, values: filterValues } = parseFilters(searchParams, values.length + 1);
+  if (!clauses.length) {
+    const error = new Error("Refusing filtered update without filters");
+    error.status = 400;
+    throw error;
+  }
+
+  const query = `update ${table} set ${assignments} where ${clauses.join(" and ")} returning *`;
+  const result = await getPool().query(query, [...values, ...filterValues]);
+  return result.rows;
+}
+
 export async function deleteRow(table, id) {
   assertAllowedTable(table);
   safeIdentifier(table);
@@ -64,6 +85,21 @@ export async function deleteRow(table, id) {
   const primaryKey = safeIdentifier(getPrimaryKey(table));
   await getPool().query(`delete from ${table} where ${primaryKey} = $1`, [id]);
   return { ok: true };
+}
+
+export async function deleteMany(table, searchParams) {
+  assertAllowedTable(table);
+  safeIdentifier(table);
+
+  const { clauses, values } = parseFilters(searchParams, 1);
+  if (!clauses.length) {
+    const error = new Error("Refusing filtered delete without filters");
+    error.status = 400;
+    throw error;
+  }
+
+  const result = await getPool().query(`delete from ${table} where ${clauses.join(" and ")} returning *`, values);
+  return result.rows;
 }
 
 export async function upsertRow(table, payload) {
