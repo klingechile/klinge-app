@@ -1,0 +1,82 @@
+name: Migrate Supabase to Railway PostgreSQL
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_restore:
+        description: "Type MIGRATE to confirm restore into Railway PostgreSQL"
+        required: true
+        type: string
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm_restore == 'MIGRATE' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Verify required secrets
+        env:
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_DATABASE_URL" ]; then
+            echo "Missing GitHub secret SUPABASE_DATABASE_URL"
+            exit 1
+          fi
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            echo "Missing GitHub secret RAILWAY_DATABASE_URL"
+            exit 1
+          fi
+
+      - name: Backup Supabase
+        env:
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          mkdir -p backups
+          STAMP="$(date +%Y%m%d_%H%M%S)"
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          pg_dump "$SUPABASE_DATABASE_URL" \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file="backups/klinge_supabase_${STAMP}.dump"
+          pg_dump "$SUPABASE_DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            --file="backups/klinge_supabase_${STAMP}.sql"
+
+      - name: Restore into Railway PostgreSQL
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          pg_restore \
+            --dbname="$RAILWAY_DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            "backups/klinge_supabase_${STAMP}.dump"
+
+      - name: Validate core counts
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          psql "$RAILWAY_DATABASE_URL" -f scripts/sql/validate-core-counts.sql
+
+      - name: Upload backup artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: klinge-supabase-backup-${{ env.STAMP }}
+          path: |
+            backups/klinge_supabase_${{ env.STAMP }}.dump
+            backups/klinge_supabase_${{ env.STAMP }}.sql
+          retention-days: 7
