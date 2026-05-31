@@ -1,12 +1,17 @@
 {
-  "name": "klinge-sales-admin",
-  "version": "0.1.0",
+  "name": "klinge-app",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Klinge Ventas Admin MVP for Railway deployment",
+  "description": "Klinge app migrated from Netlify/Supabase to Railway/PostgreSQL",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js"
+    "check": "node --check server.js",
+    "backup:supabase": "bash scripts/migrate/export-supabase.sh",
+    "restore:railway": "bash scripts/migrate/import-railway.sh"
+  },
+  "dependencies": {
+    "pg": "latest"
   },
   "engines": {
     "node": ">=22"
