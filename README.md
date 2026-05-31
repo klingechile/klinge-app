@@ -10,8 +10,28 @@ Panel interno para gestionar ventas Shopify, comprobantes por aprobar, facturaci
 - Frontend estático servido desde `/public`.
 - Importación CSV Shopify desde navegador.
 - Consolidación de órdenes por ID/Name.
+- Lectura de datos operativos de Shopify: cliente, email, teléfono, RUT desde notas, empresa, dirección, comuna/ciudad, región, productos, SKU, cantidades, método de pago, referencias, descuentos, despacho y estado DTE.
 - KPIs básicos de ventas, comprobantes y facturación.
 - Datos guardados temporalmente en `localStorage` para validar flujo.
+
+## Importar ventas Shopify
+
+1. En Shopify, exportar órdenes en CSV.
+2. Abrir el módulo **Importar Shopify**.
+3. Subir el archivo `orders_export.csv`.
+4. El sistema agrupa líneas por orden y actualiza la sección **Ventas**.
+
+Columnas mínimas esperadas:
+
+```txt
+Name, Id, Email, Financial Status, Fulfillment Status, Total, Created at, Lineitem quantity, Lineitem name, Lineitem price, Payment Method
+```
+
+También se aprovechan, cuando están disponibles:
+
+```txt
+Billing Name, Billing Phone, Billing Company, Billing City, Billing Province Name, Shipping Name, Shipping Phone, Shipping City, Shipping Province Name, Shipping Method, Discount Code, Discount Amount, Notes, Payment Reference, Payment ID, Payment References, Lineitem sku, Lineitem compare at price
+```
 
 ## Fuera del MVP
 
@@ -60,7 +80,7 @@ En local no se exige Basic Auth. En Railway, con `NODE_ENV=production`, sí se e
 1. Crear cuenta/proyecto en Railway.
 2. New Project → Deploy from GitHub repo.
 3. Elegir `klingechile/klinge-app`.
-4. Seleccionar rama `feature/klinge-sales-admin-railway-mvp` para validar MVP.
+4. Seleccionar rama `main` para validar el MVP legacy.
 5. Agregar variables de entorno.
 6. Deploy.
 7. Validar `/health`.
