@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -z "${RAILWAY_DATABASE_URL:-}" ]; then
-  echo "Missing RAILWAY_DATABASE_URL"
+TARGET_DATABASE_URL="${RAILWAY_DATABASE_URL:-${DATABASE_PUBLIC_URL:-${DATABASE_URL:-}}}"
+
+if [ -z "$TARGET_DATABASE_URL" ]; then
+  echo "Missing target database URL. Set RAILWAY_DATABASE_URL, DATABASE_PUBLIC_URL or DATABASE_URL."
   exit 1
 fi
 
@@ -19,7 +21,7 @@ fi
 
 echo "Restoring ${DUMP_FILE} into Railway PostgreSQL"
 pg_restore \
-  --dbname="$RAILWAY_DATABASE_URL" \
+  --dbname="$TARGET_DATABASE_URL" \
   --no-owner \
   --no-acl \
   --clean \
@@ -27,6 +29,6 @@ pg_restore \
   "$DUMP_FILE"
 
 echo "Validating core counts"
-psql "$RAILWAY_DATABASE_URL" -f scripts/sql/validate-core-counts.sql
+psql "$TARGET_DATABASE_URL" -f scripts/sql/validate-core-counts.sql
 
 echo "Restore done"
