@@ -1,9 +1,8 @@
 const STORAGE_KEY = "klinge_sales_admin_mvp";
 
-const sampleCsv = `Name,Email,Financial Status,Paid at,Fulfillment Status,Fulfilled at,Currency,Subtotal,Shipping,Taxes,Total,Discount Amount,Created at,Lineitem quantity,Lineitem name,Lineitem price,Lineitem sku,Billing Name,Billing City,Billing Province Name,Billing Phone,Shipping Name,Shipping City,Shipping Province Name,Shipping Phone,Notes,Payment Method,Payment Reference,Refunded Amount,Id,Tags,Risk Level,Source
-#1001,cliente1@mail.com,paid,2026-05-29 10:15:00,fulfilled,2026-05-30 11:00:00,CLP,96990,0,0,96990,0,2026-05-29 10:10:00,1,Panel LED 60x90,96990,LED-6090,Cliente Uno,Santiago,Región Metropolitana,+56911111111,Cliente Uno,Santiago,Región Metropolitana,+56911111111,,Mercado Pago,MP-001,0,1001,,Low,web
-#1002,cliente2@mail.com,paid,2026-05-29 12:20:00,unfulfilled,,CLP,139990,5000,0,144990,0,2026-05-29 12:10:00,1,Panel LED 60x120,139990,LED-60120,Cliente Dos,La Florida,Región Metropolitana,+56922222222,Cliente Dos,La Florida,Región Metropolitana,+56922222222,,Bank Deposit,TR-002,0,1002,,Low,web
-#1003,cliente3@mail.com,voided,,unfulfilled,,CLP,72540,0,0,72540,0,2026-05-28 09:00:00,1,Pantalla LED 50x70,72540,LED-5070,Cliente Tres,Ñuñoa,Región Metropolitana,+56933333333,Cliente Tres,Ñuñoa,Región Metropolitana,+56933333333,,Fintoc,FT-003,0,1003,,Low,web`;
+const sampleCsv = `Name,Email,Financial Status,Paid at,Fulfillment Status,Fulfilled at,Accepts Marketing,Currency,Subtotal,Shipping,Taxes,Total,Discount Code,Discount Amount,Shipping Method,Created at,Lineitem quantity,Lineitem name,Lineitem price,Lineitem compare at price,Lineitem sku,Lineitem requires shipping,Lineitem taxable,Lineitem fulfillment status,Billing Name,Billing Street,Billing Address1,Billing Address2,Billing Company,Billing City,Billing Zip,Billing Province,Billing Country,Billing Phone,Shipping Name,Shipping Street,Shipping Address1,Shipping Address2,Shipping Company,Shipping City,Shipping Zip,Shipping Province,Shipping Country,Shipping Phone,Notes,Payment Method,Payment Reference,Refunded Amount,Vendor,Outstanding Balance,Id,Tags,Risk Level,Source,Lineitem discount,Billing Province Name,Shipping Province Name,Payment ID,Payment Terms Name,Next Payment Due At,Payment References
+1044,onlysport.illapel@gmail.com,paid,2025-10-02 17:09:34 -0300,fulfilled,2025-10-02 17:09:35 -0300,yes,CLP,163056,1,30981,194038,KLIN5000,5000,Envío a Regiones con Chilexpress – Cobro en destino,2025-10-02 17:09:33 -0300,2,Pantalla LED Publicitaria 60x90 cm – Atrae Más Clientes + Impresión GRATIS - Con Impresión Incluida (Cliente envía el Diseño),84028,159990,,true,true,fulfilled,Paulina Nuñez,Constitución 14,Constitución 14,,,Illapel,'1930000,CO,CL,+56978035645,Paulina Nuñez,Constitución 14,Constitución 14,,,Illapel,'1930000,CO,CL,+56978035645,"Documento emitido en Lioren\nTipo DTE: \nFolio: \nPDF: ",Mercado Pago Checkout Pro,rnmk1bigAIyDQ3iTLn8TCFljJ,0,Klinge,0,6866149310695,,Low,web,0,Coquimbo,Coquimbo,rnmk1bigAIyDQ3iTLn8TCFljJ,,,rnmk1bigAIyDQ3iTLn8TCFljJ
+1045,roaguzmaneve@gmail.com,paid,2025-10-08 21:24:40 -0300,fulfilled,2025-10-08 21:24:41 -0300,yes,CLP,117647,1,22353,140001,,0,Envío a Regiones con Chilexpress – Cobro en destino,2025-10-08 21:24:39 -0300,1,Máquina de Milkshake Doble Klinge – Potencia Profesional para Tu Negocio - 23 x 23 x 53 cm,117647,300000,MK-1002,true,true,fulfilled,Evelyn Roa Guzmán,"3 poniente 555, local 2","3 poniente 555, local 2",,Grido,Viña del Mar,,VS,CL,+56961502930,Evelyn Roa Guzmán,"3 poniente 555, local 2","3 poniente 555, local 2",,Grido,Viña del Mar,,VS,CL,+56961502930,"Rut: 78.222.515-4\nInversiones Soul SpA",Mercado Pago Checkout Pro,ralfsqfqcM1OoXXzYlvIbc6UE,0,Klinge,0,6877841653991,,Low,web,0,Valparaíso,Valparaíso,ralfsqfqcM1OoXXzYlvIbc6UE,,,ralfsqfqcM1OoXXzYlvIbc6UE`;
 
 let state = loadState();
 
@@ -28,9 +27,25 @@ function esc(value) {
     .replaceAll("'", "&#039;");
 }
 
+function clean(value) {
+  return String(value ?? "").replace(/^\uFEFF/, "").trim();
+}
+
+function cleanZip(value) {
+  return clean(value).replace(/^'/, "");
+}
+
 function loadState() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { sales: [], proofStatus: {} }; }
-  catch { return { sales: [], proofStatus: {} }; }
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    return {
+      sales: Array.isArray(parsed.sales) ? parsed.sales : [],
+      proofStatus: parsed.proofStatus || {},
+      importHistory: Array.isArray(parsed.importHistory) ? parsed.importHistory : []
+    };
+  } catch {
+    return { sales: [], proofStatus: {}, importHistory: [] };
+  }
 }
 
 function saveState() {
@@ -57,7 +72,7 @@ function parseCsv(text) {
     if ((char === "\n" || char === "\r") && !quote) {
       if (char === "\r" && next === "\n") i++;
       row.push(cell);
-      if (row.some(Boolean)) rows.push(row);
+      if (row.some(value => clean(value))) rows.push(row);
       row = [];
       cell = "";
       continue;
@@ -67,59 +82,160 @@ function parseCsv(text) {
 
   if (cell || row.length) {
     row.push(cell);
-    if (row.some(Boolean)) rows.push(row);
+    if (row.some(value => clean(value))) rows.push(row);
   }
 
-  const headers = rows.shift()?.map(h => h.trim()) || [];
-  return rows.map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+  const headers = rows.shift()?.map(header => clean(header)) || [];
+  return rows.map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
 }
 
 function numberFrom(value) {
-  const clean = String(value || "0").replace(/[^0-9.-]/g, "");
-  return Number(clean || 0);
+  const cleanNumber = String(value || "0").replace(/[^0-9.-]/g, "");
+  return Number(cleanNumber || 0);
+}
+
+function field(row, ...names) {
+  for (const name of names) {
+    const value = row[name];
+    if (value !== undefined && clean(value) !== "") return clean(value);
+  }
+  return "";
+}
+
+function normalizedStatus(value, fallback = "unknown") {
+  return clean(value || fallback).toLowerCase();
+}
+
+function orderDisplayName(value, fallback) {
+  const raw = clean(value || fallback);
+  if (!raw) return "—";
+  return raw.startsWith("#") ? raw : `#${raw}`;
+}
+
+function extractRut(notes) {
+  const match = String(notes || "").match(/(?:rut|r\.u\.t\.?)[:\s]*([0-9]{1,2}\.?[0-9]{3}\.?[0-9]{3}-?[0-9kK])/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
+function extractCompany(row, notes) {
+  const company = field(row, "Billing Company", "Shipping Company");
+  if (company) return company;
+
+  const lines = String(notes || "")
+    .split(/\r?\n/)
+    .map(line => clean(line))
+    .filter(Boolean)
+    .filter(line => !/^rut\s*:/i.test(line));
+
+  return lines.find(line => /spa|ltda|eirl|s\.a\.?|limitada|sociedad/i.test(line)) || "";
+}
+
+function inferInvoiceStatus(row) {
+  const notes = String(row.Notes || "");
+  const folioMatch = notes.match(/folio:[^\S\r\n]*([^\s\r\n]+)/i);
+  if (folioMatch?.[1]) return "facturada";
+  if (/pdf:[^\S\r\n]*https?:\/\//i.test(notes)) return "facturada";
+  if (/lioren|dte|folio/i.test(notes)) return "revisar dte";
+  if (normalizedStatus(row["Financial Status"]) === "paid") return "pendiente";
+  return "no lista";
 }
 
 function normalizeOrders(rows) {
   const map = new Map();
 
   for (const row of rows) {
-    const orderId = row.Id || row.Name;
-    if (!orderId) continue;
+    const orderKey = field(row, "Id", "Order ID", "Order Id", "Name");
+    if (!orderKey) continue;
 
-    if (!map.has(orderId)) {
-      map.set(orderId, {
-        id: orderId,
-        name: row.Name || orderId,
-        email: row.Email || "",
-        customer: row["Billing Name"] || row["Shipping Name"] || row.Email || "Cliente sin nombre",
-        phone: row["Billing Phone"] || row["Shipping Phone"] || "",
-        city: row["Shipping City"] || row["Billing City"] || "",
-        region: row["Shipping Province Name"] || row["Billing Province Name"] || "",
-        financialStatus: row["Financial Status"] || "unknown",
-        fulfillmentStatus: row["Fulfillment Status"] || "unfulfilled",
-        paymentMethod: row["Payment Method"] || "Sin método",
-        paymentReference: row["Payment Reference"] || "",
+    const name = orderDisplayName(field(row, "Name"), orderKey);
+    const notes = row.Notes || "";
+
+    if (!map.has(orderKey)) {
+      const customer = field(row, "Billing Name", "Shipping Name", "Customer", "Email") || "Cliente sin nombre";
+      const phone = field(row, "Billing Phone", "Shipping Phone", "Phone");
+      const city = field(row, "Shipping City", "Billing City");
+      const region = field(row, "Shipping Province Name", "Billing Province Name", "Shipping Province", "Billing Province");
+      const address = field(row, "Shipping Street", "Shipping Address1", "Billing Street", "Billing Address1");
+      const zip = cleanZip(field(row, "Shipping Zip", "Billing Zip"));
+
+      map.set(orderKey, {
+        id: orderKey,
+        name,
+        email: field(row, "Email"),
+        customer,
+        phone,
+        rut: extractRut(notes),
+        company: extractCompany(row, notes),
+        acceptsMarketing: field(row, "Accepts Marketing"),
+        billing: {
+          name: field(row, "Billing Name"),
+          address: field(row, "Billing Street", "Billing Address1"),
+          address2: field(row, "Billing Address2"),
+          company: field(row, "Billing Company"),
+          city: field(row, "Billing City"),
+          zip: cleanZip(field(row, "Billing Zip")),
+          province: field(row, "Billing Province Name", "Billing Province"),
+          country: field(row, "Billing Country"),
+          phone: field(row, "Billing Phone")
+        },
+        shippingAddress: {
+          name: field(row, "Shipping Name"),
+          address,
+          address2: field(row, "Shipping Address2"),
+          company: field(row, "Shipping Company"),
+          city,
+          zip,
+          province: region,
+          country: field(row, "Shipping Country"),
+          phone: field(row, "Shipping Phone")
+        },
+        city,
+        region,
+        address,
+        zip,
+        financialStatus: normalizedStatus(row["Financial Status"]),
+        fulfillmentStatus: normalizedStatus(row["Fulfillment Status"], "unfulfilled"),
+        paymentMethod: field(row, "Payment Method") || "Sin método",
+        paymentReference: field(row, "Payment Reference", "Payment References", "Payment ID"),
+        paymentTermsName: field(row, "Payment Terms Name"),
         total: numberFrom(row.Total),
         subtotal: numberFrom(row.Subtotal),
         shipping: numberFrom(row.Shipping),
         taxes: numberFrom(row.Taxes),
-        createdAt: row["Created at"] || "",
-        paidAt: row["Paid at"] || "",
-        notes: row.Notes || "",
-        riskLevel: row["Risk Level"] || "",
-        source: row.Source || "shopify_csv",
+        discountCode: field(row, "Discount Code"),
+        discountAmount: numberFrom(row["Discount Amount"]),
+        refundedAmount: numberFrom(row["Refunded Amount"]),
+        outstandingBalance: numberFrom(row["Outstanding Balance"]),
+        currency: field(row, "Currency") || "CLP",
+        shippingMethod: field(row, "Shipping Method"),
+        createdAt: field(row, "Created at"),
+        paidAt: field(row, "Paid at"),
+        fulfilledAt: field(row, "Fulfilled at"),
+        cancelledAt: field(row, "Cancelled at"),
+        notes,
+        noteAttributes: field(row, "Note Attributes"),
+        vendor: field(row, "Vendor"),
+        tags: field(row, "Tags"),
+        riskLevel: field(row, "Risk Level"),
+        source: field(row, "Source") || "shopify_csv",
         invoiceStatus: inferInvoiceStatus(row),
         items: []
       });
     }
 
-    const sale = map.get(orderId);
-    if (row["Lineitem name"]) {
+    const sale = map.get(orderKey);
+    const itemName = field(row, "Lineitem name", "Lineitem Name", "Product", "Product title");
+    if (itemName) {
       sale.items.push({
-        name: row["Lineitem name"],
-        sku: row["Lineitem sku"] || "",
-        quantity: numberFrom(row["Lineitem quantity"] || 1),
-        unitPrice: numberFrom(row["Lineitem price"])
+        name: itemName,
+        sku: field(row, "Lineitem sku", "SKU"),
+        quantity: numberFrom(field(row, "Lineitem quantity", "Quantity") || 1),
+        unitPrice: numberFrom(row["Lineitem price"]),
+        compareAtPrice: numberFrom(row["Lineitem compare at price"]),
+        discount: numberFrom(row["Lineitem discount"]),
+        requiresShipping: field(row, "Lineitem requires shipping"),
+        taxable: field(row, "Lineitem taxable"),
+        fulfillmentStatus: field(row, "Lineitem fulfillment status")
       });
     }
   }
@@ -127,26 +243,32 @@ function normalizeOrders(rows) {
   return [...map.values()];
 }
 
-function inferInvoiceStatus(row) {
-  const notes = `${row.Notes || ""}`.toLowerCase();
-  if (notes.includes("lioren") || notes.includes("folio") || notes.includes("dte")) return "facturada";
-  if ((row["Financial Status"] || "").toLowerCase() === "paid") return "pendiente";
-  return "no lista";
+function isPaid(sale) {
+  return sale.financialStatus === "paid";
+}
+
+function isCancelled(sale) {
+  return sale.financialStatus === "voided" || Boolean(sale.cancelledAt);
 }
 
 function isManualPayment(sale) {
   const method = (sale.paymentMethod || "").toLowerCase();
-  return method.includes("bank") || method.includes("deposit") || method.includes("transfer") || method.includes("transferencia");
+  return method.includes("bank") || method.includes("deposit") || method.includes("transfer") || method.includes("transferencia") || method.includes("manual") || method.includes("comprobante");
 }
 
-function importSales(newSales) {
+function importSales(newSales, meta = {}) {
   const existing = new Map(state.sales.map(s => [s.id, s]));
   let added = 0;
   let updated = 0;
 
   for (const sale of newSales) {
-    if (existing.has(sale.id)) {
-      existing.set(sale.id, { ...existing.get(sale.id), ...sale });
+    const current = existing.get(sale.id);
+    if (current) {
+      existing.set(sale.id, {
+        ...current,
+        ...sale,
+        invoiceStatus: current.invoiceStatus === "facturada" ? current.invoiceStatus : sale.invoiceStatus
+      });
       updated++;
     } else {
       existing.set(sale.id, sale);
@@ -155,6 +277,17 @@ function importSales(newSales) {
   }
 
   state.sales = [...existing.values()].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  state.importHistory = [
+    {
+      fileName: meta.fileName || "CSV Shopify",
+      importedAt: new Date().toISOString(),
+      rows: meta.rows || 0,
+      orders: newSales.length,
+      added,
+      updated
+    },
+    ...state.importHistory.slice(0, 9)
+  ];
   saveState();
   return { added, updated, total: state.sales.length };
 }
@@ -167,12 +300,14 @@ function paymentBadge(status) {
   const s = String(status || "").toLowerCase();
   if (s === "paid") return badge("Pagada", "green");
   if (s === "voided") return badge("Anulada", "red");
+  if (s === "pending" || s === "authorized") return badge("Pendiente", "yellow");
   return badge(status || "Pendiente", "yellow");
 }
 
 function fulfillmentBadge(status) {
   const s = String(status || "").toLowerCase();
   if (s === "fulfilled") return badge("Despachada", "green");
+  if (s === "partial") return badge("Parcial", "yellow");
   if (s === "unfulfilled") return badge("Pendiente", "yellow");
   return badge(status || "—", "blue");
 }
@@ -181,6 +316,7 @@ function invoiceBadge(status) {
   const s = String(status || "").toLowerCase();
   if (s === "facturada") return badge("Facturada", "green");
   if (s === "pendiente") return badge("Pendiente", "yellow");
+  if (s === "revisar dte") return badge("Revisar DTE", "yellow");
   return badge(status || "No lista", "blue");
 }
 
@@ -195,9 +331,9 @@ function renderAll() {
 
 function renderDashboard() {
   const sales = state.sales;
-  const revenue = sales.filter(s => s.financialStatus !== "voided").reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const revenue = sales.filter(s => !isCancelled(s)).reduce((sum, s) => sum + Number(s.total || 0), 0);
   const proofs = sales.filter(s => isManualPayment(s) && (state.proofStatus[s.id] || "pendiente") !== "aprobado");
-  const billing = sales.filter(s => s.financialStatus === "paid" && s.invoiceStatus !== "facturada");
+  const billing = sales.filter(s => isPaid(s) && s.invoiceStatus !== "facturada");
 
   $("kpiOrders").textContent = sales.length;
   $("kpiRevenue").textContent = money(revenue);
@@ -210,30 +346,38 @@ function renderDashboard() {
 
   const tasks = [];
   if (proofs.length) tasks.push(`${proofs.length} comprobante(s) por aprobar.`);
-  if (billing.length) tasks.push(`${billing.length} venta(s) lista(s) para facturación.`);
-  const pendingDispatch = sales.filter(s => s.financialStatus === "paid" && s.fulfillmentStatus !== "fulfilled").length;
+  if (billing.length) tasks.push(`${billing.length} venta(s) lista(s) para facturación o revisión DTE.`);
+  const pendingDispatch = sales.filter(s => isPaid(s) && s.fulfillmentStatus !== "fulfilled").length;
   if (pendingDispatch) tasks.push(`${pendingDispatch} venta(s) pagada(s) pendiente(s) de despacho.`);
-  if (!tasks.length) tasks.push("Sin prioridades críticas. Importa ventas para revisar operación.");
+  if (!tasks.length) tasks.push("Sin prioridades críticas. Importa ventas Shopify para revisar operación.");
 
   $("priorityList").innerHTML = tasks.map(t => `<li>${esc(t)}</li>`).join("");
 }
 
+function productSummary(sale) {
+  return sale.items.map(item => {
+    const sku = item.sku ? ` · SKU ${item.sku}` : "";
+    return `${item.quantity}x ${item.name}${sku}`;
+  }).join(", ") || "—";
+}
+
 function renderSales() {
   const term = ($("salesSearch")?.value || "").toLowerCase();
-  const filtered = state.sales.filter(s => `${s.name} ${s.customer} ${s.email} ${s.items.map(i => i.name).join(" ")}`.toLowerCase().includes(term));
+  const filtered = state.sales.filter(s => `${s.name} ${s.id} ${s.customer} ${s.company} ${s.rut} ${s.email} ${s.phone} ${s.city} ${s.region} ${s.items.map(i => `${i.name} ${i.sku}`).join(" ")}`.toLowerCase().includes(term));
 
   $("salesRows").innerHTML = filtered.map(s => `
     <tr>
-      <td><strong>${esc(s.name)}</strong><br><small>${esc(s.id)}</small></td>
+      <td><strong>${esc(s.name)}</strong><br><small>ID ${esc(s.id)}</small></td>
       <td>${esc(s.createdAt || "—")}</td>
-      <td>${esc(s.customer)}<br><small>${esc(s.email)}</small></td>
-      <td>${esc(s.items.map(i => `${i.quantity}x ${i.name}`).join(", ") || "—")}</td>
-      <td>${money(s.total)}</td>
+      <td>${esc(s.customer)}${s.company ? `<br><small>${esc(s.company)}</small>` : ""}${s.rut ? `<br><small>RUT ${esc(s.rut)}</small>` : ""}</td>
+      <td>${esc(s.email || "—")}<br><small>${esc(s.phone || "Sin teléfono")}</small></td>
+      <td>${esc(productSummary(s))}</td>
+      <td>${esc(s.city || "—")}<br><small>${esc(s.region || "")}</small></td>
+      <td><strong>${money(s.total)}</strong><br><small>${esc(s.paymentMethod)}</small></td>
       <td>${paymentBadge(s.financialStatus)}</td>
-      <td>${fulfillmentBadge(s.fulfillmentStatus)}</td>
-      <td>${invoiceBadge(s.invoiceStatus)}</td>
+      <td>${fulfillmentBadge(s.fulfillmentStatus)}<br>${invoiceBadge(s.invoiceStatus)}</td>
     </tr>
-  `).join("") || `<tr><td colspan="8" class="empty">Sin ventas para mostrar.</td></tr>`;
+  `).join("") || `<tr><td colspan="9" class="empty">Sin ventas para mostrar.</td></tr>`;
 }
 
 function renderProofs() {
@@ -241,7 +385,7 @@ function renderProofs() {
   $("proofRows").innerHTML = rows.map(s => {
     const status = state.proofStatus[s.id] || "pendiente";
     return `<tr>
-      <td>${esc(s.name)}</td><td>${esc(s.customer)}</td><td>${money(s.total)}</td><td>${esc(s.paymentMethod)}</td>
+      <td>${esc(s.name)}</td><td>${esc(s.customer)}<br><small>${esc(s.phone || s.email)}</small></td><td>${money(s.total)}</td><td>${esc(s.paymentMethod)}</td>
       <td>${badge(status, status === "aprobado" ? "green" : "yellow")}</td>
       <td><button class="miniBtn" data-approve-proof="${esc(s.id)}">Aprobar</button></td>
     </tr>`;
@@ -249,9 +393,9 @@ function renderProofs() {
 }
 
 function renderBilling() {
-  const rows = state.sales.filter(s => s.financialStatus === "paid");
+  const rows = state.sales.filter(s => isPaid(s));
   $("billingRows").innerHTML = rows.map(s => `
-    <tr><td>${esc(s.name)}</td><td>${esc(s.customer)}</td><td>${money(s.total)}</td><td>${paymentBadge(s.financialStatus)}</td><td>${invoiceBadge(s.invoiceStatus)}</td><td><button class="miniBtn" data-invoice="${esc(s.id)}">Marcar facturada</button></td></tr>
+    <tr><td>${esc(s.name)}</td><td>${esc(s.customer)}${s.rut ? `<br><small>RUT ${esc(s.rut)}</small>` : ""}</td><td>${money(s.total)}</td><td>${paymentBadge(s.financialStatus)}</td><td>${invoiceBadge(s.invoiceStatus)}</td><td><button class="miniBtn" data-invoice="${esc(s.id)}">Marcar facturada</button></td></tr>
   `).join("") || `<tr><td colspan="6" class="empty">No hay ventas pagadas para facturar.</td></tr>`;
 }
 
@@ -283,27 +427,51 @@ function renderReports() {
   renderReport("productReport", products);
 }
 
-function renderImportSummary(result, sales) {
-  const paid = sales.filter(s => s.financialStatus === "paid").length;
-  const voided = sales.filter(s => s.financialStatus === "voided").length;
-  const revenue = sales.filter(s => s.financialStatus !== "voided").reduce((sum, s) => sum + s.total, 0);
+function renderImportSummary(result, sales, meta = {}) {
+  const paid = sales.filter(isPaid).length;
+  const voided = sales.filter(isCancelled).length;
+  const reviewDte = sales.filter(s => s.invoiceStatus === "revisar dte").length;
+  const revenue = sales.filter(s => !isCancelled(s)).reduce((sum, s) => sum + s.total, 0);
   $("importSummary").innerHTML = [
+    ["Archivo", meta.fileName || "CSV Shopify"],
+    ["Filas Shopify", meta.rows || 0],
     ["Órdenes leídas", sales.length],
     ["Nuevas", result.added],
     ["Actualizadas", result.updated],
     ["Pagadas", paid],
     ["Anuladas", voided],
+    ["DTE por revisar", reviewDte],
     ["Monto no anulado", money(revenue)]
   ].map(([k, v]) => `<div class="summaryItem"><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join("");
 }
 
+function renderImportError(message) {
+  $("importSummary").innerHTML = `<div class="importError"><strong>No se pudo importar</strong><p>${esc(message)}</p></div>`;
+}
+
+function validateShopifyRows(rows) {
+  if (!rows.length) throw new Error("El archivo no contiene filas de venta.");
+  const headers = Object.keys(rows[0] || {});
+  const hasOrder = headers.includes("Name") || headers.includes("Id") || headers.includes("Order ID") || headers.includes("Order Id");
+  const hasLineItem = headers.includes("Lineitem name") || headers.includes("Lineitem Name") || headers.includes("Product") || headers.includes("Product title");
+  if (!hasOrder || !hasLineItem) {
+    throw new Error("El CSV no parece ser una exportación de órdenes Shopify. Debe incluir al menos Name/Id y Lineitem name.");
+  }
+}
+
 async function handleCsvFile(file) {
-  const text = await file.text();
-  const rows = parseCsv(text);
-  const sales = normalizeOrders(rows);
-  const result = importSales(sales);
-  renderImportSummary(result, sales);
-  renderAll();
+  try {
+    const text = await file.text();
+    const rows = parseCsv(text);
+    validateShopifyRows(rows);
+    const sales = normalizeOrders(rows);
+    if (!sales.length) throw new Error("No se encontraron órdenes válidas para importar.");
+    const result = importSales(sales, { fileName: file.name, rows: rows.length });
+    renderImportSummary(result, sales, { fileName: file.name, rows: rows.length });
+    renderAll();
+  } catch (error) {
+    renderImportError(error.message || "Error inesperado leyendo el CSV.");
+  }
 }
 
 function setupEvents() {
@@ -321,20 +489,25 @@ function setupEvents() {
 
   $("csvFile").addEventListener("change", event => {
     const file = event.target.files?.[0];
-    if (file) handleCsvFile(file);
+    if (file) {
+      const label = document.querySelector(".dropzone span");
+      if (label) label.textContent = file.name;
+      handleCsvFile(file);
+    }
   });
 
   $("loadSampleBtn").addEventListener("click", () => {
-    const sales = normalizeOrders(parseCsv(sampleCsv));
-    const result = importSales(sales);
-    renderImportSummary(result, sales);
+    const rows = parseCsv(sampleCsv);
+    const sales = normalizeOrders(rows);
+    const result = importSales(sales, { fileName: "modelo-shopify-demo.csv", rows: rows.length });
+    renderImportSummary(result, sales, { fileName: "modelo-shopify-demo.csv", rows: rows.length });
     renderAll();
   });
 
   $("salesSearch").addEventListener("input", renderSales);
 
   $("clearDataBtn").addEventListener("click", () => {
-    state = { sales: [], proofStatus: {} };
+    state = { sales: [], proofStatus: {}, importHistory: [] };
     saveState();
     renderAll();
     $("importSummary").innerHTML = "<p>Datos demo eliminados.</p>";
