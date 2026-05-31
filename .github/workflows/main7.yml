@@ -1,0 +1,130 @@
+name: Migrate Klinge Supabase to Railway PostgreSQL
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Escribe MIGRATE para ejecutar la migración"
+        required: true
+        default: "MIGRATE"
+
+      supabase_database_url:
+        description: "URL PostgreSQL de Supabase. Si queda vacío usa secret/variable SUPABASE_DATABASE_URL"
+        required: false
+        default: ""
+
+      railway_database_url:
+        description: "DATABASE_PUBLIC_URL de Railway. Si queda vacío usa secret/variable RAILWAY_DATABASE_URL"
+        required: false
+        default: ""
+
+jobs:
+  migrate-db:
+    if: ${{ github.event.inputs.confirm == 'MIGRATE' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_DATABASE_URL_INPUT: ${{ github.event.inputs.supabase_database_url }}
+      RAILWAY_DATABASE_URL_INPUT: ${{ github.event.inputs.railway_database_url }}
+
+      SUPABASE_DATABASE_URL_SECRET: ${{ secrets.SUPABASE_DATABASE_URL }}
+      SUPABASE_DATABASE_URL_VAR: ${{ vars.SUPABASE_DATABASE_URL }}
+
+      RAILWAY_DATABASE_URL_SECRET: ${{ secrets.RAILWAY_DATABASE_URL }}
+      RAILWAY_DATABASE_URL_VAR: ${{ vars.RAILWAY_DATABASE_URL }}
+
+      DATABASE_PUBLIC_URL_SECRET: ${{ secrets.DATABASE_PUBLIC_URL }}
+      DATABASE_PUBLIC_URL_VAR: ${{ vars.DATABASE_PUBLIC_URL }}
+
+      PGSSLMODE: require
+
+    steps:
+      - name: Resolve database URLs
+        run: |
+          SUPABASE_DATABASE_URL="$SUPABASE_DATABASE_URL_INPUT"
+          if [ -z "$SUPABASE_DATABASE_URL" ]; then
+            SUPABASE_DATABASE_URL="$SUPABASE_DATABASE_URL_SECRET"
+          fi
+          if [ -z "$SUPABASE_DATABASE_URL" ]; then
+            SUPABASE_DATABASE_URL="$SUPABASE_DATABASE_URL_VAR"
+          fi
+
+          RAILWAY_DATABASE_URL="$RAILWAY_DATABASE_URL_INPUT"
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            RAILWAY_DATABASE_URL="$RAILWAY_DATABASE_URL_SECRET"
+          fi
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            RAILWAY_DATABASE_URL="$RAILWAY_DATABASE_URL_VAR"
+          fi
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            RAILWAY_DATABASE_URL="$DATABASE_PUBLIC_URL_SECRET"
+          fi
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            RAILWAY_DATABASE_URL="$DATABASE_PUBLIC_URL_VAR"
+          fi
+
+          if [ -z "$SUPABASE_DATABASE_URL" ]; then
+            echo "Missing Supabase URL. Add it in the workflow input supabase_database_url or create SUPABASE_DATABASE_URL as Secret/Variable."
+            exit 1
+          fi
+
+          if [ -z "$RAILWAY_DATABASE_URL" ]; then
+            echo "Missing Railway URL. Add it in the workflow input railway_database_url or create RAILWAY_DATABASE_URL / DATABASE_PUBLIC_URL as Secret/Variable."
+            exit 1
+          fi
+
+          echo "::add-mask::$SUPABASE_DATABASE_URL"
+          echo "::add-mask::$RAILWAY_DATABASE_URL"
+
+          echo "SUPABASE_DATABASE_URL=$SUPABASE_DATABASE_URL" >> "$GITHUB_ENV"
+          echo "RAILWAY_DATABASE_URL=$RAILWAY_DATABASE_URL" >> "$GITHUB_ENV"
+
+          echo "Database URLs resolved OK"
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Backup Supabase public schema
+        run: |
+          pg_dump "$SUPABASE_DATABASE_URL" \
+            --schema=public \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file=klinge_supabase.dump
+
+      - name: Clean Railway PostgreSQL public schema
+        run: |
+          psql "$RAILWAY_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          drop schema if exists public cascade;
+          create schema public;
+          grant all on schema public to public;
+          SQL
+
+      - name: Restore Supabase backup into Railway PostgreSQL
+        run: |
+          pg_restore \
+            --dbname="$RAILWAY_DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            klinge_supabase.dump
+
+      - name: Validate migrated tables and counts
+        run: |
+          psql "$RAILWAY_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          select table_name
+          from information_schema.tables
+          where table_schema = 'public'
+          order by table_name;
+
+          select count(*) as ventas from ventas;
+          select count(*) as clientes from clientes;
+          select count(*) as user_pins from user_pins;
+          select count(*) as user_permissions from user_permissions;
+          select count(*) as vendedores from vendedores;
+          SQL
