@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const NODE_ENV = process.env.NODE_ENV || "development";
+const BASIC_AUTH_ENABLED = process.env.BASIC_AUTH_ENABLED === "true";
 
 function setSecurityHeaders(res) {
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -36,7 +36,7 @@ function unauthorized(res) {
 }
 
 function isAuthorized(req) {
-  if (NODE_ENV !== "production") return true;
+  if (!BASIC_AUTH_ENABLED) return true;
   if (!ADMIN_USER || !ADMIN_PASSWORD) return false;
 
   const auth = req.headers.authorization || "";
@@ -81,7 +81,7 @@ const server = http.createServer(async (req, res) => {
       } catch (_) {
         database = false;
       }
-      return sendJson(res, 200, { status: "ok", service: "klinge-app", database });
+      return sendJson(res, 200, { status: "ok", service: "klinge-app", database, basicAuth: BASIC_AUTH_ENABLED });
     }
 
     if (!isAuthorized(req)) {
