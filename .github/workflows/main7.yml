@@ -87,6 +87,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
+      - name: Configure IPv4 DNS for PostgreSQL
+        run: |
+          # Force IPv4 connections by disabling IPv6 preference
+          echo "precedence ::ffff:0:0/96  100" | sudo tee -a /etc/gai.conf
+
       - name: Backup Supabase public schema
         run: |
           pg_dump "$SUPABASE_DATABASE_URL" \
