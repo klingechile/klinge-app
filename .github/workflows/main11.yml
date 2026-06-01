@@ -1,0 +1,135 @@
+name: Migrate Klinge PostgreSQL
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Escribe MIGRATE para ejecutar la migración de Klinge"
+        required: true
+        default: "MIGRATE"
+      mode:
+        description: "endpoint usa la BD configurada en Railway"
+        required: true
+        default: "endpoint"
+        type: choice
+        options:
+          - endpoint
+      klinge_base_url:
+        description: "URL pública de Klinge en Railway"
+        required: true
+        default: "https://klinge-app-production.up.railway.app"
+      admin_key:
+        description: "ADMIN_API_KEY del backend Klinge"
+        required: false
+        default: ""
+
+jobs:
+  migrate-via-endpoint:
+    if: ${{ github.event.inputs.confirm == 'MIGRATE' && github.event.inputs.mode == 'endpoint' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      BASE_URL_INPUT: ${{ github.event.inputs.klinge_base_url }}
+      ADMIN_KEY_INPUT: ${{ github.event.inputs.admin_key }}
+      ADMIN_KEY_SECRET: ${{ secrets.ADMIN_API_KEY }}
+
+    steps:
+      - name: Resolve config
+        run: |
+          BASE_URL="${BASE_URL_INPUT%/}"
+          ADMIN_KEY="$ADMIN_KEY_INPUT"
+
+          if [ -z "$ADMIN_KEY" ]; then
+            ADMIN_KEY="$ADMIN_KEY_SECRET"
+          fi
+
+          if [ -z "$BASE_URL" ]; then
+            echo "Missing klinge_base_url"
+            exit 1
+          fi
+
+          echo "::add-mask::$ADMIN_KEY"
+          echo "BASE_URL=$BASE_URL" >> "$GITHUB_ENV"
+          echo "ADMIN_KEY=$ADMIN_KEY" >> "$GITHUB_ENV"
+
+      - name: Check Klinge PostgreSQL health
+        run: |
+          URL="$BASE_URL/debug/klinge-db/health"
+
+          if [ -n "$ADMIN_KEY" ]; then
+            URL="$URL?admin_key=$ADMIN_KEY"
+          fi
+
+          HTTP_CODE=$(curl -sS -o health.json -w "%{http_code}" "$URL" || true)
+
+          echo "HTTP_CODE=$HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "401" ]; then
+            echo "Unauthorized. Revisa ADMIN_API_KEY o BASIC_AUTH_ENABLED en Railway."
+            cat health.json || true
+            exit 1
+          fi
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Endpoint failed with HTTP $HTTP_CODE"
+            cat health.json || true
+            exit 1
+          fi
+
+          cat health.json
+          node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('health.json','utf8')); if(!data.ok){ console.error(data); process.exit(1); } console.log('Health OK');"
+
+      - name: Run migration through deployed Klinge endpoint
+        run: |
+          URL="$BASE_URL/debug/klinge-db/migrate-from-supabase"
+
+          if [ -n "$ADMIN_KEY" ]; then
+            URL="$URL?admin_key=$ADMIN_KEY"
+          fi
+
+          HTTP_CODE=$(curl -sS -X POST -o migrate.json -w "%{http_code}" "$URL" || true)
+
+          echo "HTTP_CODE=$HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "401" ]; then
+            echo "Unauthorized. Revisa ADMIN_API_KEY o BASIC_AUTH_ENABLED en Railway."
+            cat migrate.json || true
+            exit 1
+          fi
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Migration endpoint failed with HTTP $HTTP_CODE"
+            cat migrate.json || true
+            exit 1
+          fi
+
+          cat migrate.json
+          node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('migrate.json','utf8')); if(!data.ok){ console.error(data); process.exit(1); } console.log('Migration OK');"
+
+      - name: Verify migrated counts
+        run: |
+          URL="$BASE_URL/debug/klinge-db/counts"
+
+          if [ -n "$ADMIN_KEY" ]; then
+            URL="$URL?admin_key=$ADMIN_KEY"
+          fi
+
+          HTTP_CODE=$(curl -sS -o counts.json -w "%{http_code}" "$URL" || true)
+
+          echo "HTTP_CODE=$HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "401" ]; then
+            echo "Unauthorized. Revisa ADMIN_API_KEY o BASIC_AUTH_ENABLED en Railway."
+            cat counts.json || true
+            exit 1
+          fi
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Counts endpoint failed with HTTP $HTTP_CODE"
+            cat counts.json || true
+            exit 1
+          fi
+
+          cat counts.json
+          node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('counts.json','utf8')); if(!data.ok){ console.error(data); process.exit(1); } console.log('Counts OK');"
